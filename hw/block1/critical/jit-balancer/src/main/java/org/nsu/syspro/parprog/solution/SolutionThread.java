@@ -29,7 +29,7 @@ public class SolutionThread extends UserThread {
      * @return Type of execution for given method
      */
     private ExecutionType checkMethod(MethodID id) {
-        synchronized (data) {
+        synchronized (data) { // DELETE
             if (!data.executionType.containsKey(id)) {
                 data.executionType.put(id, new ExecutionInformation(ExecutionType.INTERPRET, false));
             }
@@ -80,8 +80,8 @@ public class SolutionThread extends UserThread {
      * @param id Method id
      * @return Type of execution for given method
      */
-    private synchronized ExecutionType checkCompiled(MethodID id) {
-        synchronized (data) {
+    private ExecutionType checkCompiled(MethodID id) {
+        synchronized (data) { // -> CompilationData
             if (data.executionType.get(id).currentType == ExecutionType.EXECUTE_L1) {
                 int currentUses = data.uses.get(id) + 1;
                 data.uses.put(id, currentUses);
@@ -108,9 +108,7 @@ public class SolutionThread extends UserThread {
             }
         };
 
-        synchronized (executor) {
-            executor.submit(task);
-        }
+        executor.submit(task);
     }
 
     @Override
