@@ -3,18 +3,14 @@ package org.nsu.syspro.parprog.solution;
 import org.nsu.syspro.parprog.UserThread;
 import org.nsu.syspro.parprog.external.*;
 
-import java.util.HashMap;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 public class SolutionThread extends UserThread {
 
-    private static final int MAX_INTERPRET = 20;
-    private static final int MAX_L1 = 900;
-
     private static final CompilationData data = new CompilationData();
-    private final HashMap<MethodID, Integer> uses = new HashMap<>();
-    private static final ExecutorService executor = Executors.newCachedThreadPool();
+    private static final CompileObserver compileObserver = new CompileObserver(data);
+
+    private final Uses uses = new Uses();
 
     public SolutionThread(int compilationThreadBound, ExecutionEngine exec, CompilationEngine compiler, Runnable r) {
         super(compilationThreadBound, exec, compiler, r);
@@ -24,8 +20,8 @@ public class SolutionThread extends UserThread {
      * Checks which type of execution suits for given methods.
      * <ul>
      *   <li> If method is not yet compiled, then if it was interpreted enough times
-     *   (more then {@link SolutionThread#MAX_INTERPRET}) it would bew compiled by L1 compiler;
-     *   <li>If method is compiled by L1 compiler then if it was executed enough times (more than {@link SolutionThread#MAX_L1})
+     *   (more then {@link Uses#MAX_INTERPRET}) it would bew compiled by L1 compiler;
+     *   <li>If method is compiled by L1 compiler then if it was executed enough times (more than {@link Uses#MAX_L1})
      *   then it would be compiled by L2 compiler.
      * </ul>
      *
@@ -33,12 +29,12 @@ public class SolutionThread extends UserThread {
      * @return Type of execution for given method
      */
     private ExecutionType checkMethod(MethodID id) {
-        if (!uses.containsKey(id)) {
-            uses.put(id, 0);
+        if (!uses.isInitialized(id)) {
+            uses.initialize(id);
         }
 
-        if (data.containsInformation(id)) {
-            return checkCompiled(id);
+        if (data.isCompiled(id)) {
+            return dispatchForCompiledMethod(id);
         }
 
         return checkInterpret(id);
@@ -46,7 +42,7 @@ public class SolutionThread extends UserThread {
 
     /**
      * Method checks which type of execution suits for given method.
-     * If method is interpreted enough times (more then {@link SolutionThread#MAX_INTERPRET})
+     * If method is interpreted enough times (more then {@link Uses#MAX_INTERPRET})
      * then it will be compiled by L1 compiler in current thread.
      * Otherwise, it will be interpreted.
      *
@@ -54,13 +50,12 @@ public class SolutionThread extends UserThread {
      * @return Type of execution for given method
      */
     private ExecutionType checkInterpret(MethodID id) {
-        int currentUses = uses.get(id) + 1;
-        uses.put(id, currentUses);
+        uses.incrementFor(id);
 
-        if (currentUses > MAX_INTERPRET) {
+        if (uses.needsCompilationL1(id)) {
             CompiledMethod compiledMethod = compiler.compile_l1(id);
-            data.updateMethodInformation(id, compiledMethod, ExecutionInformation.create(ExecutionType.EXECUTE_L1));
-            uses.put(id, 0);
+            data.updateMethodInformation(id, compiledMethod, ExecutionType.EXECUTE_L1);
+            uses.initialize(id);
             return ExecutionType.EXECUTE_L1;
         }
         return ExecutionType.INTERPRET;
@@ -69,7 +64,7 @@ public class SolutionThread extends UserThread {
 
     /**
      * Methods checks which type of execution suits for given method.
-     * IF method executed enough times on L1 optimisation (more then {@link SolutionThread#MAX_L1}) then
+     * IF method executed enough times on L1 optimisation (more then {@link Uses#MAX_L1}) then
      * it will be recompiled with L2 compiler in new {@link Thread}. But current execution will be done
      * with L1 optimisation.
      * <p>
@@ -78,13 +73,13 @@ public class SolutionThread extends UserThread {
      * @param id Method id
      * @return Type of execution for given method
      */
-    private ExecutionType checkCompiled(MethodID id) {
-        ExecutionInformation methodInformation = data.getExecutionInformation(id);
-        if (methodInformation.currentType == ExecutionType.EXECUTE_L1) {
-            int currentUses = uses.get(id) + 1;
-            uses.put(id, currentUses);
-            if (currentUses > MAX_L1 && !methodInformation.isCompiling) {
-                data.putExecutionInformation(id, ExecutionInformation.create(ExecutionType.EXECUTE_L1, true));
+    private ExecutionType dispatchForCompiledMethod(MethodID id) {
+        ExecutionType executionType = data.getExecutionType(id);
+
+        if (executionType == ExecutionType.EXECUTE_L1) {
+            uses.incrementFor(id);
+
+            if (uses.needsCompilationL2(id)) {
                 compileL2(id);
             }
             return ExecutionType.EXECUTE_L1;
@@ -98,12 +93,7 @@ public class SolutionThread extends UserThread {
      * @param id Method to compile
      */
     private void compileL2(MethodID id) {
-        Runnable task = () -> {
-            CompiledMethod compiledMethod = compiler.compile_l2(id);
-            data.updateMethodInformation(id, compiledMethod, ExecutionInformation.create(ExecutionType.EXECUTE_L2));
-        };
-
-        executor.submit(task);
+        compileObserver.submit(id, compiler);
     }
 
     @Override
@@ -112,12 +102,13 @@ public class SolutionThread extends UserThread {
         CompiledMethod method;
 
         type = checkMethod(id);
-        method = data.getCompiledMethod(id);
 
         if (type == ExecutionType.INTERPRET) {
             return exec.interpret(id);
         }
 
+        method = data.getCompiledMethod(id);
+        assert(method != null);
         return exec.execute(method);
     }
 }
