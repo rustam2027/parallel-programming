@@ -3,12 +3,10 @@ package org.nsu.syspro.parprog.solution;
 import org.nsu.syspro.parprog.UserThread;
 import org.nsu.syspro.parprog.external.*;
 
-import java.util.concurrent.ExecutorService;
-
 public class SolutionThread extends UserThread {
 
-    private static final CompilationData data = new CompilationData();
-    private static final CompileObserver compileObserver = new CompileObserver(data);
+    private CompilationData data = new CompilationData();
+    private static final CompileObserver compileObserver = new CompileObserver();
 
     private final Uses uses = new Uses();
 
@@ -53,10 +51,8 @@ public class SolutionThread extends UserThread {
         uses.incrementFor(id);
 
         if (uses.needsCompilationL1(id)) {
-            CompiledMethod compiledMethod = compiler.compile_l1(id);
-            data.updateMethodInformation(id, compiledMethod, ExecutionType.EXECUTE_L1);
-            uses.initialize(id);
-            return ExecutionType.EXECUTE_L1;
+            compileL1(id);
+            uses.initialize(id); // TODO: Solve problem (maybe add await)
         }
         return ExecutionType.INTERPRET;
 
@@ -84,16 +80,32 @@ public class SolutionThread extends UserThread {
             }
             return ExecutionType.EXECUTE_L1;
         }
+        assert (executionType == ExecutionType.EXECUTE_L2);
         return ExecutionType.EXECUTE_L2;
     }
 
     /**
-     * Compiles given method with L2 optimisation in using {@link ExecutorService}.
+     * Compiles given method with L1 optimisation in using {@link CompileObserver}.
+     *
+     * @param id Method to compile
+     */
+    private void compileL1(MethodID id) {
+        compileObserver.submit(id, compiler, ExecutionType.INTERPRET);
+    }
+
+    /**
+     * Compiles given method with L2 optimisation in using {@link CompileObserver}.
      *
      * @param id Method to compile
      */
     private void compileL2(MethodID id) {
-        compileObserver.submit(id, compiler);
+        compileObserver.submit(id, compiler, ExecutionType.EXECUTE_L1);
+    }
+
+    private void synchronize() {
+        if (data.getVersion() != compileObserver.getDataVersion()) {
+            data = compileObserver.getData();
+        }
     }
 
     @Override
@@ -102,13 +114,16 @@ public class SolutionThread extends UserThread {
         CompiledMethod method;
 
         type = checkMethod(id);
-
+        ExecutionResult result;
         if (type == ExecutionType.INTERPRET) {
-            return exec.interpret(id);
+            result = exec.interpret(id);
+        } else {
+            method = data.getCompiledMethod(id);
+            assert (method != null);
+            result = exec.execute(method);
         }
 
-        method = data.getCompiledMethod(id);
-        assert(method != null);
-        return exec.execute(method);
+        synchronize();
+        return result;
     }
 }

@@ -11,6 +11,33 @@ public class CompilationData {
     private final HashMap<MethodID, ExecutionType> executionType = new HashMap<>();
 
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
+    private long version;
+
+    CompilationData() {
+        this(0);
+    }
+
+    CompilationData(long version) {
+        this.version = version;
+    }
+
+    public long getVersion() {
+        try {
+            lock.readLock().lock();
+            return version;
+        }finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    public void updateVersion() {
+        try {
+            lock.writeLock().lock();
+            this.version += 1;
+        }finally {
+            lock.writeLock().unlock();
+        }
+    }
 
     /**
      * Retrieves the compiled method associated with the given method identifier.
@@ -70,6 +97,22 @@ public class CompilationData {
             lock.readLock().lock();
             assert(executionType.containsKey(id) || !compiledMethods.containsKey(id));
             return executionType.containsKey(id) && compiledMethods.containsKey(id);
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    public CompilationData copy() {
+        try {
+            lock.readLock().lock();
+
+            CompilationData copy = new CompilationData();
+
+            for (MethodID id : compiledMethods.keySet()) {
+                copy.compiledMethods.put(id, compiledMethods.get(id));
+                copy.executionType.put(id, executionType.get(id));
+            }
+            return copy;
         } finally {
             lock.readLock().unlock();
         }
