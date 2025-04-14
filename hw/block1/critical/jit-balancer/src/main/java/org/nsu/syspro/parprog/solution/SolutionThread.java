@@ -52,7 +52,7 @@ public class SolutionThread extends UserThread {
 
         if (uses.needsCompilationL1(id)) {
             compileL1(id);
-            uses.initialize(id); // TODO: Solve problem (maybe add await)
+            uses.initialize(id);
         }
         return ExecutionType.INTERPRET;
 

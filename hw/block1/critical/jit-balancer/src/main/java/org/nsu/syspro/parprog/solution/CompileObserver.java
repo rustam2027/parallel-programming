@@ -4,8 +4,6 @@ import org.nsu.syspro.parprog.external.CompilationEngine;
 import org.nsu.syspro.parprog.external.CompiledMethod;
 import org.nsu.syspro.parprog.external.MethodID;
 
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -50,10 +48,21 @@ public class CompileObserver {
         executor.submit(task);
     }
 
+    /**
+     * Returns the version of the underlying data.
+     *
+     * @return the current version of the data
+     */
     public long getDataVersion() {
         return data.getVersion();
     }
 
+    /**
+     * Returns a copy of the {@code CompilationData} object.
+     * This ensures the internal state remains encapsulated and cannot be modified externally.
+     *
+     * @return a copy of the current {@code CompilationData}
+     */
     public CompilationData getData() {
         return data.copy();
     }

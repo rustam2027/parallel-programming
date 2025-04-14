@@ -21,6 +21,11 @@ public class CompilationData {
         this.version = version;
     }
 
+    /**
+     * Returns the current version of the compilation data.
+     *
+     * @return the current version number
+     */
     public long getVersion() {
         try {
             lock.readLock().lock();
@@ -30,6 +35,9 @@ public class CompilationData {
         }
     }
 
+    /**
+     * Increments the version number of the compilation data by one.
+     */
     public void updateVersion() {
         try {
             lock.writeLock().lock();
@@ -102,6 +110,11 @@ public class CompilationData {
         }
     }
 
+    /**
+     * Creates and returns a deep copy of this {@code CompilationData} instance.
+     *
+     * @return a new {@code CompilationData} object containing the same data
+     */
     public CompilationData copy() {
         try {
             lock.readLock().lock();
